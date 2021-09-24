@@ -1,10 +1,12 @@
 # capsule
 
 #### Description
-Capsule is a next generation Hypervisor which is compatible with VM/container/partition ecosystem and naturally supports hot upgrade capabilities. Based on Rust programming language of memory security, Capsule supports both Type-1 and Type-2 types across various IT/OT/CT scenarios.
+
+Capsule is a new hypervisor fully controlled by the openEuler community. Like  KVM hypervisor, the Capsule hypervisor empowers the virtualization extensions in different CPU implementations. Rust programming language is chosen to re-invent the hypervisor for security. Moreover, Capsule can support common virtual machines (for diverse business applications), micro-VMs (for container workloads), and logical partitions (for realtime applications) at the same time. 
 
 #### Software Architecture
-Software architecture description
+
+The design keys can be referenced [here](/docs/design.md).
 
 #### Installation
 
