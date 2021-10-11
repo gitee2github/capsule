@@ -2,7 +2,7 @@
 
 # 功能性
 
-Capsule Hypervisor基于软硬结合的思路，采用一套架构支持通用虚拟机(Common Virtual Machine)、安全容器(Micro-VM)、分区(Partition)三种运行形态。
+Capsule Hypervisor基于软硬结合的思路，采用一套架构支持通用虚拟机(Common Virtual Machine)、安全容器(Micro-VM)、逻辑分区(Logical Partition)三种运行形态。
 
 ## 虚拟机
 
@@ -38,11 +38,19 @@ Capsule Hypervisor基于软硬结合的思路，采用一套架构支持通用�
 
 包含虚拟机运行过程中必需的固件和传统外设。
 
-## 分区
+## 逻辑分区
+
+逻辑分区可以看成是虚拟机的一个特例，CPU、内存和外设均以独占的方式使用，无法复用和调度，实现思路如下图所示：
+
+<div align="center">
+<img src="assets/Logical_partition.png" height="330" width="660">  
+</div>
+
+其中，管理分区是Capsule Hypervisor所运行的系统，一旦某个物理CPU被分配给一个逻辑分区后，该物理CPU就会从管理分区中下线，完全脱离管理分区的管辖(无法对分区中的CPU进行任务调度)，并重新进入初始化过程，进而开始执行逻辑分区中的程序；物理内存会被划分成独立的区间供不同逻辑分区命名用，通过硬件辅助虚拟化技术中的内存隔离能力可以确保不同逻辑分区不会相互干扰，但是GPA到HAP转换阶段不会产生缺页异常；此外，外部设备借助虚拟设备直通技术以独占方式被逻辑分区使用。
 
 ## 用户态与内核态接口
 
-内核模块呈现全局唯一**/dev/capsule**字符设备，用户态模块通过ioctl使用全局基本功能：
+内核模块呈现全局唯一/dev/capsule字符设备，用户态模块通过ioctl使用全局基本功能：
 >* API兼容性获取；
 >* 创建虚拟机或分区；
 
