@@ -30,7 +30,7 @@ Capsule Hypervisor基于软硬结合的思路，采用一套架构支持通用�
 
 ### 虚拟IO设备与IO总线
 
-与KVM的设计类似，Capsule Hypervisor是处于内核态和物理硬件打交道的一个模块，对于虚拟IO设备和总线的模拟完全由用户态的辅助程序完成，这里我们使用[StratoVirt项目](https://gitee.com/openeuler/stratovirt)。
+与KVM的设计类似，Capsule是处于内核态和物理硬件打交道的一个模块，对于虚拟IO设备和总线的模拟完全由用户态的辅助程序完成，这里我们使用[StratoVirt项目](https://gitee.com/openeuler/stratovirt)。
 
 虚拟IO设备包含存储、网络、图形和各类异构加速设备；IO总线主要支持常用的PCI总线，实现虚拟机的MMIO，DMA和中断路由操作。
 
@@ -46,7 +46,7 @@ Capsule Hypervisor基于软硬结合的思路，采用一套架构支持通用�
 <img src="assets/Logical_partition.png" height="300" width="600">  
 </div>
 
-其中，管理分区是Capsule Hypervisor所运行的系统，一旦某个物理CPU被分配给一个逻辑分区后，该物理CPU就会从管理分区中下线，完全脱离管理分区的管辖(无法对分区中的CPU进行任务调度)，并重新进入初始化过程，进而开始执行逻辑分区中的程序；物理内存会被划分成独立的区间供不同逻辑分区使用，通过硬件辅助虚拟化技术中的内存隔离能力可以确保不同逻辑分区不会相互干扰，但是GPA到HPA转换阶段不会产生缺页异常；此外，外部设备借助虚拟设备直通技术以独占方式被逻辑分区使用。
+其中，管理分区是Capsule所运行的系统，一旦某个物理CPU被分配给一个逻辑分区后，该物理CPU就会从管理分区中下线，完全脱离管理分区的管辖(无法对分区中的CPU进行任务调度)，并重新进入初始化过程，进而开始执行逻辑分区中的程序；物理内存会被划分成独立的区间供不同逻辑分区使用，通过硬件辅助虚拟化技术中的内存隔离能力可以确保不同逻辑分区不会相互干扰，但是GPA到HPA转换阶段不会产生缺页异常；此外，外部设备借助虚拟设备直通技术以独占方式被逻辑分区使用。
 
 ## 1.3. 顶层架构
 
@@ -63,6 +63,14 @@ Capsule Hypervisor包含内核和用户态辅助程序两部分。内核部分�
 >* 对于普通虚拟机和安全容器形态，运行线程遵循Linux线程模型。虚拟机的每个CPU对就一个vCPU线程，所有虚拟机的设备可以共用一个IO线程，也可独占线程；所有这些线程受Linux线程调度机制管理。
 
 >* 对于逻辑分区形态，出于安全和实时性考虑，分区CPU对Linux不可见，因此需要设计一套精简的面向逻辑分区CPU的专用线程模型。
+
+以安全容器形态为例(普通虚拟机略复杂)，各组件/线程运行过程如下图所示：
+
+<div align="center">
+<img src="assets/vm_process.png" height="420" width="690">  
+</div>
+
+StratoVirt组件首先运行Main Thread主线程，该线程主要进行虚拟机和各种设备的创建，过程中将相关信息同步给Capsule Core组件或者使用Capsule Core提供的各种能力。完成各种设备创建后，Main Thread就变成IO Thread不断等待IO事件并进行处理直到虚拟机关闭。IO Thread运行的同时，每个CPU对应的vCPU Thread也开始运行，该线程进入一个外循环，使用Capsule Core提供的硬件辅助虚拟化能力，如果Capsule Core无法处理由用户态进行模拟处理；Capsule Core的实现是一个内循环，在内核态通过硬件提供机制进入虚拟机模式执行虚拟机程序，如果不能处理先由Capsule Core模拟处理，Capsule Core也不能处理的再交由用户态处理。vCPU借助MMIO操作经由eventfd通知IO线程有事件产生；IO线程处理完成后通过irqfd以虚拟中断方式通知vCPU IO处理结果。
 
 ### 代码目录结构(构建态)
 
