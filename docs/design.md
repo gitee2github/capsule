@@ -1,4 +1,4 @@
-本文档包含了Capsule Hypervisor的设计思路。
+本文档包含了Capsule Hypervisor的顶层设计思路。
 
 # 1. 功能性
 
@@ -70,7 +70,11 @@ Capsule Hypervisor包含内核和用户态辅助程序两部分。内核部分�
 <img src="assets/vm_process.png" height="420" width="690">  
 </div>
 
-StratoVirt组件首先运行Main Thread主线程，该线程主要进行虚拟机和各种设备的创建，过程中将相关信息同步给Capsule Core组件或者使用Capsule Core提供的各种能力。完成各种设备创建后，Main Thread就变成IO Thread不断等待IO事件并进行处理直到虚拟机关闭。IO Thread运行的同时，每个CPU对应的vCPU Thread也开始运行，该线程进入一个外循环，使用Capsule Core提供的硬件辅助虚拟化能力，如果Capsule Core无法处理由用户态进行模拟处理；Capsule Core的实现是一个内循环，在内核态通过硬件提供机制进入虚拟机模式执行虚拟机程序，如果不能处理先由Capsule Core模拟处理，Capsule Core也不能处理的再交由用户态处理。vCPU借助MMIO操作经由eventfd通知IO线程有事件产生；IO线程处理完成后通过irqfd以虚拟中断方式通知vCPU IO处理结果。
+安全容器形态包含用户态的StratoVirt组件和内核态的Capsule Core组件，这样划分是出于安全设计考虑，详见安全部分说明。StratoVirt组件首先运行Main Thread主线程，该线程主要进行虚拟机和各种设备的创建，过程中通过用户态与内核态接口(详见[用户态与内核态接口部分](#用户态与内核态接口))将相关信息同步给Capsule Core组件或者使用Capsule Core提供的各种能力。完成各种设备创建后，Main Thread就变成IO Thread不断等待IO事件并进行处理直到虚拟机关闭。IO Thread运行的同时，每个CPU对应的vCPU Thread也开始运行，该线程进入一个外循环，使用Capsule Core提供的硬件辅助虚拟化能力，如果Capsule Core无法处理由用户态进行模拟处理；Capsule Core的实现是一个内循环，在内核态通过硬件提供机制进入虚拟机模式执行虚拟机程序，如果不能处理先由Capsule Core模拟处理，Capsule Core也不能处理的再交由用户态处理。vCPU借助MMIO操作经由eventfd通知IO线程有事件产生；IO线程处理完成后通过irqfd以虚拟中断方式通知vCPU IO处理结果。
+
+安全容器各个线程在运行过程中隐式地依赖Linux内核能力，也意味着可通过Linux内核对资源使用进行控制：
+>* 基于物理时钟中断触发vCPU线程和IO线程的调度，通过调度才能真正获得CPU资源；
+>* GPA到HPA转换过程中缺页会使用内核中内存页的动态分配能力，实现内存资源的按需使用；
 
 ### 代码目录结构(构建态)
 
@@ -112,6 +116,15 @@ capsule
 
 # 2. 性能
 
+Capsule Hypervisor采用硬件辅助虚拟化技术实现对虚拟机和分区的支持，很大一部分原因就是为了提升虚拟机或分区的性能。硬件辅助虚拟化技术的核心思想是把实现逻辑简单且常用的功能直接交由硬件完成，而且实现逻辑复杂但又相对使用频度较低的功能交由软件完成，使硬件和软件各自发挥所长。
+
+整体来说硬件辅助虚拟化可分为：
+>* CPU与内存相关的基础硬件辅助虚拟化能力，如Intel x86的VT-x，也叫VMX；
+>* 设备中断与DMA相关IO硬件辅助虚拟化能力，如Intel x86的VT-d；
+
 # 3. 安全性
 
-# 4. 可靠性
+对于虚拟机或逻辑分区内部的软件而言，虚拟机和逻辑分区就是一个安全沙箱。这些软件无法透过沙箱直接访问或攻击真实的物理资源。
+
+然而Capsule Hypervisor在实现过程中如果存在缺限或漏洞，就有可能被虚拟机或逻辑分区内的软件间件利用，进而破坏Hypervisor，基至是物理硬件。在虚拟机模式下，出于权限最小化的考虑，Capsule Hypervisor并没有采用内核线程模型，而是采用普通的用户态线程模型。内核态的Capsule Core仅实现必要的部分(如执行模式切换等特权操作硬件要求只能在内核态执行)或者性能相关且逻辑简单的部分(如中断控制器的模拟)，而将实现逻辑复杂的IO设备模拟放到用户态运行，并通过内核态提供的接口调用内核能力或同步状态信息。
+
